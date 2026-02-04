@@ -1,8 +1,10 @@
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from filecmp import dircmp
+from typing import Generator
 
+import tempfile
 from pdfdiff.base_pdf_diff import BasePdfDiff
 from pdfdiff.imagediff.base_image_diff import BaseImageDiff
 from pdfdiff.imagediff.image_diff import ImageDiff
@@ -14,6 +16,12 @@ from pdfdiff.pdf2images.base_pdf_2_images import BasePdf2Images
 from pdfdiff.pdf2images.pdf_2_images_by_gs import Pdf2ImagesByGs
 
 
+@contextmanager
+def create_directory(suffix: str | None = None, directory: Path | None = None) -> Generator[Path, None, None]:
+    with tempfile.TemporaryDirectory(suffix=suffix, dir=directory) as tmpdir:
+        yield Path(tmpdir)
+
+
 @dataclass
 class PdfDiff(BasePdfDiff):
     pdf_2_image: BasePdf2Images = field(default_factory=Pdf2ImagesByGs)
@@ -22,26 +30,29 @@ class PdfDiff(BasePdfDiff):
     append_images_executor: MagicExecutor = field(default_factory=MagickAppendImages)
 
     def diff(self, pdf1: Path, pdf2: Path, output_file: Path) -> None:
-        output_dir_1 = Path(TemporaryDirectory(delete=False).name)
-        output_dir_2 = Path(TemporaryDirectory(delete=False).name)
+        with ExitStack[Path]() as stack:
+            working_dir = stack.enter_context(create_directory(suffix="working_dir"))
+            output_dir_1 = stack.enter_context(create_directory(suffix="output_1", directory=working_dir))
+            output_dir_2 = stack.enter_context(create_directory(suffix="output_2", directory=working_dir))
 
-        self.pdf_2_image.to_images(pdf1, output_dir=output_dir_1)
-        self.pdf_2_image.to_images(pdf2, output_dir=output_dir_2)
+            self.pdf_2_image.to_images(pdf1, output_dir=output_dir_1)
+            self.pdf_2_image.to_images(pdf2, output_dir=output_dir_2)
 
-        cmp = dircmp(output_dir_1, output_dir_2)
+            cmp = dircmp(output_dir_1, output_dir_2)
 
-        cmp_image_files = []
-        for comon_file in cmp.common_files:
-            image1 = output_dir_1 / comon_file
-            image2 = output_dir_2 / comon_file
+            cmp_image_files = []
 
-            diff_image = Path(f"{image1.name}-{image2.name}.diff.png")
+            for comon_file in cmp.common_files:
+                image1 = output_dir_1 / comon_file
+                image2 = output_dir_2 / comon_file
 
-            self.image_diff.diff(image1, image2, diff_image)
+                diff_image = working_dir / f"{image1.name}-{image2.name}.diff.png"
 
-            cmp_image_file = Path(f"{image1.name}-{image2.name}.result.png")
+                self.image_diff.diff(image1, image2, diff_image)
 
-            self.append_images_executor.execute([image1, image2, diff_image], cmp_image_file)
-            cmp_image_files.append(cmp_image_file)
+                cmp_image_file = working_dir / f"{image1.name}-{image2.name}.result.png"
 
-        self.images_2_pdf.to_pdf(cmp_image_files, pdf_file=output_file)
+                self.append_images_executor.execute([image1, image2, diff_image], cmp_image_file)
+                cmp_image_files.append(cmp_image_file)
+
+            self.images_2_pdf.to_pdf(cmp_image_files, pdf_file=output_file)
