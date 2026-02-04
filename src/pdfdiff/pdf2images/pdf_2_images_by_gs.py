@@ -1,6 +1,6 @@
 from pathlib import Path
 from subprocess import run
-from src.pdfdiff.pdf2images.base_pdf_2_images import BasePdf2Images
+from pdfdiff.pdf2images.base_pdf_2_images import BasePdf2Images
 
 
 class Pdf2ImagesByGs(BasePdf2Images):

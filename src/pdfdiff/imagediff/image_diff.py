@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-from src.pdfdiff.imagediff.base_image_diff import BaseImageDiff
+from pdfdiff.imagediff.base_image_diff import BaseImageDiff
 
 
 class ImageDiff(BaseImageDiff):

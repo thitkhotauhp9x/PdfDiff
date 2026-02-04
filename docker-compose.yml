@@ -1,0 +1,6 @@
+services:
+  pdfdiff:
+    build: .
+    volumes:
+      - $PWD:$PWD
+    command: sh -c "python"

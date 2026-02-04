@@ -1,6 +1,7 @@
 import argparse
+from pathlib import Path
 
-from src.pdfdiff.pdf_diff import PdfDiff
+from pdfdiff.pdfdiff import PdfDiff
 
 
 def main():
@@ -12,7 +13,7 @@ def main():
     args = parser.parse_args()
 
     pdf_diff = PdfDiff()
-    pdf_diff.diff(args.pdf1, args.pdf2, args.output_file)
+    pdf_diff.diff(Path(args.pdf1), Path(args.pdf2), Path(args.output_file))
 
 
 if __name__ == "__main__":
