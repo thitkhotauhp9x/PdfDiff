@@ -30,7 +30,7 @@ class PdfDiff(BasePdfDiff):
     append_images_executor: MagicExecutor = field(default_factory=MagickAppendImages)
 
     def diff(self, pdf1: Path, pdf2: Path, output_file: Path) -> None:
-        with ExitStack[Path]() as stack:
+        with ExitStack() as stack:
             working_dir = stack.enter_context(create_directory(suffix="working_dir"))
             output_dir_1 = stack.enter_context(create_directory(suffix="output_1", directory=working_dir))
             output_dir_2 = stack.enter_context(create_directory(suffix="output_2", directory=working_dir))
