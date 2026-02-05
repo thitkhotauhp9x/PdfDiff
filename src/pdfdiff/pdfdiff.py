@@ -1,3 +1,5 @@
+import logging
+from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +16,9 @@ from pdfdiff.magickcmdtools.magick_append_images import MagickAppendImages
 from pdfdiff.magickcmdtools.magick_executor import MagicExecutor
 from pdfdiff.pdf2images.base_pdf_2_images import BasePdf2Images
 from pdfdiff.pdf2images.pdf_2_images_by_gs import Pdf2ImagesByGs
+
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -35,24 +40,34 @@ class PdfDiff(BasePdfDiff):
             output_dir_1 = stack.enter_context(create_directory(suffix="output_1", directory=working_dir))
             output_dir_2 = stack.enter_context(create_directory(suffix="output_2", directory=working_dir))
 
-            self.pdf_2_image.to_images(pdf1, output_dir=output_dir_1)
-            self.pdf_2_image.to_images(pdf2, output_dir=output_dir_2)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = pool.map(self.pdf_2_image.to_images,[pdf1, pdf2], [output_dir_1, output_dir_2])
 
-            cmp = dircmp(output_dir_1, output_dir_2)
+                for result in results:
+                    logger.debug("%s", result)
 
-            cmp_image_files = []
+                cmp = dircmp(output_dir_1, output_dir_2)
 
-            for comon_file in cmp.common_files:
-                image1 = output_dir_1 / comon_file
-                image2 = output_dir_2 / comon_file
+                cmp_image_files = []
 
-                diff_image = working_dir / f"{image1.name}-{image2.name}.diff.png"
+                images_1 = [output_dir_1 / common_file for common_file in cmp.common_files]
+                images_2 = [output_dir_2 / common_file for common_file in cmp.common_files]
 
-                self.image_diff.diff(image1, image2, diff_image)
+                def func(image_1, image_2):
+                    return self.diff_image_core(cmp_image_files, image_1, image_2, working_dir)
 
-                cmp_image_file = working_dir / f"{image1.name}-{image2.name}.result.png"
+                results = pool.map(func,  images_1, images_2)
+                for result in results:
+                    logger.debug("%s", result)
 
-                self.append_images_executor.execute([image1, image2, diff_image], cmp_image_file)
-                cmp_image_files.append(cmp_image_file)
+                self.images_2_pdf.to_pdf(cmp_image_files, pdf_file=output_file)
 
-            self.images_2_pdf.to_pdf(cmp_image_files, pdf_file=output_file)
+    def diff_image_core(self, cmp_image_files: list[Path], image1: Path, image2: Path, working_dir: Path):
+        diff_image = working_dir / f"{image1.name}-{image2.name}.diff.png"
+
+        self.image_diff.diff(image1, image2, diff_image)
+
+        cmp_image_file = working_dir / f"{image1.name}-{image2.name}.result.png"
+
+        self.append_images_executor.execute([image1, image2, diff_image], cmp_image_file)
+        cmp_image_files.append(cmp_image_file)
