@@ -8,6 +8,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "pillow (>=12.1.0,<13.0.0)"
 ]
 
 [tool.poetry]

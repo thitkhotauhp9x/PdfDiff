@@ -1,5 +1,4 @@
 from concurrent.futures.process import ProcessPoolExecutor
-from functools import partial
 
 
 def add(a, b):

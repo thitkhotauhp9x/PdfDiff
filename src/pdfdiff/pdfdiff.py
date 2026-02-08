@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from filecmp import dircmp
 from typing import Generator
+from PIL import Image
 
 import tempfile
 from pdfdiff.base_pdf_diff import BasePdfDiff
@@ -46,21 +47,36 @@ class PdfDiff(BasePdfDiff):
                 for result in results:
                     logger.debug("%s", result)
 
-                cmp = dircmp(output_dir_1, output_dir_2)
-
-                cmp_image_files = []
-
-                images_1 = [output_dir_1 / common_file for common_file in cmp.common_files]
-                images_2 = [output_dir_2 / common_file for common_file in cmp.common_files]
-
-                def func(image_1, image_2):
-                    return self.diff_image_core(cmp_image_files, image_1, image_2, working_dir)
-
-                results = pool.map(func,  images_1, images_2)
-                for result in results:
-                    logger.debug("%s", result)
-
+                PdfDiff.first_diff(output_dir_1, output_dir_2)
+                cmp_image_files = self.second_diff(output_dir_1, output_dir_2, working_dir)
                 self.images_2_pdf.to_pdf(cmp_image_files, pdf_file=output_file)
+
+    @staticmethod
+    def first_diff(dir1: Path, dir2: Path) -> None:
+        cmp = dircmp(dir1, dir2)
+        for file in cmp.left_only:
+            w, h = Image.open(dir1 / file).size
+            PdfDiff.create_blank_image(w, h, dir2 / file)
+
+        for file in cmp.right_only:
+            w, h = Image.open(Path(dir2 / file).as_posix()).size
+            PdfDiff.create_blank_image(w, h, dir1 / file)
+
+    def second_diff(self, dir1: Path, dir2: Path, working_dir: Path) -> list[Path]:
+        cmp = dircmp(dir1, dir2)
+        cmp_image_files = []
+
+        for file in cmp.common_files:
+            print(file)
+            image_1 = dir1 / file
+            image_2 = dir2 / file
+            self.diff_image_core(cmp_image_files, image_1, image_2, working_dir)
+        return cmp_image_files
+
+    @staticmethod
+    def create_blank_image(width: int, height: int, output_path: Path) -> None:
+        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        img.save(output_path.as_posix())
 
     def diff_image_core(self, cmp_image_files: list[Path], image1: Path, image2: Path, working_dir: Path):
         diff_image = working_dir / f"{image1.name}-{image2.name}.diff.png"
