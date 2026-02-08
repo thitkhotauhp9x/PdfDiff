@@ -28,11 +28,11 @@ def test_pdfdiff(n1, n2) -> None:
         create_pdf(n1, Font.TIMES_ROMAN, pdf1)
         create_pdf(n2, Font.TIMES_ROMAN, pdf2)
 
-        output_file = "output.pdf"
+        output_file = stack.enter_context(NamedTemporaryFile(suffix="output.pdf"))
 
         subprocess.run([
             "poetry", "run", "pdfdiff",
             "--pdf1", pdf1.as_posix(),
             "--pdf2", pdf2.as_posix(),
-            "--output-file", output_file
+            "--output-file", output_file.name
         ])
