@@ -1,5 +1,5 @@
 services:
-  pdfdiff:
+  pdftools:
     build: .
     volumes:
       - $PWD:$PWD
